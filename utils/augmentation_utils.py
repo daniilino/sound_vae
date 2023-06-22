@@ -403,6 +403,9 @@ def draw_text(h, w, font_source, text_source, convert_RGB=True):
 
     # scale = random.randint(10, image_scale // 4)
     scale_initial = 20
+    x_random = 1
+    y_random = 0
+    scale_random = 0.02
     required_text_w = w - (w//5)
 
     font_path = sample_random_file(font_source)
@@ -411,7 +414,9 @@ def draw_text(h, w, font_source, text_source, convert_RGB=True):
     text = sample_phrase(text_source)
 
     text_w, text_h = get_text_dimensions(text, font)
-    random_factor = random.gauss(1,0.1)
+
+    random_factor = random.gauss(1, scale_random)
+
     scale_proper = int(scale_initial * required_text_w / text_w * random_factor)
 
     font = ImageFont.truetype(font_path, scale_proper)  
@@ -419,8 +424,8 @@ def draw_text(h, w, font_source, text_source, convert_RGB=True):
     #image pre-processing
     image = np.zeros((h, w, 3), dtype=int) + 255
 
-    bias_x = random.gauss(1,0.1)
-    bias_y = random.gauss(1,0.1)
+    bias_x = random.gauss(1, x_random)
+    bias_y = random.gauss(1, y_random)
     origin = [w*bias_x//2,h*bias_y//2]
 
     # image post-processing

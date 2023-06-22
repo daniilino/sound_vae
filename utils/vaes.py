@@ -1,5 +1,21 @@
 import torch.nn as nn
+import torch.nn.functional as F
 import torch
+
+from typing import Tuple
+
+class Upsampler(nn.Module):
+
+    def __init__(self, in_channels, out_channels, out_size: Tuple[int, int]):
+        super().__init__()
+        self.out_HW = (out_size[0]*2, out_size[1]*2)
+        self.conv = nn.Conv2d(in_channels, out_channels=out_channels,
+                              kernel_size = 3, stride= 2, padding = 1)
+
+    def forward(self, x):
+        h = F.interpolate(x, size = self.out_HW)
+        h = self.conv(h)
+        return h
 
 class VAE(nn.Module):
     def __init__(self, sample_x, hidden_dims, z_dim):
@@ -27,6 +43,7 @@ class VAE(nn.Module):
 
             out_h = int(((out_h - K + (2*P)) / S) + 1)
             out_w = int(((out_w - K + (2*P)) / S) + 1)
+            # (64 - 7 + 3) / 1 + 1
             self.intermediate_hw.append((out_h, out_w))
 
             in_channels = h_dim
@@ -42,36 +59,50 @@ class VAE(nn.Module):
         self.decoder_input = nn.Linear(z_dim, self.hidden_dims[-1] * out_h * out_w)
 
         self.hidden_dims.reverse()
+        self.intermediate_hw.reverse()
 
 
+        # for i in range(len(self.hidden_dims) - 1):
+        #     modules.append(
+        #         nn.Sequential(
+        #             nn.ConvTranspose2d(self.hidden_dims[i],
+        #                                self.hidden_dims[i + 1],
+        #                                kernel_size=K,
+        #                                stride = S,
+        #                                padding = P,
+        #                                output_padding = 1),
+        #             nn.BatchNorm2d(self.hidden_dims[i + 1]),
+        #             nn.LeakyReLU())
+        #     )
         for i in range(len(self.hidden_dims) - 1):
             modules.append(
                 nn.Sequential(
-                    nn.ConvTranspose2d(self.hidden_dims[i],
-                                       self.hidden_dims[i + 1],
-                                       kernel_size=K,
-                                       stride = S,
-                                       padding = P,
-                                       output_padding = 1),
-                    nn.BatchNorm2d(self.hidden_dims[i + 1]),
+                    Upsampler(in_channels = self.hidden_dims[i], out_channels = self.hidden_dims[i+1], out_size = self.intermediate_hw[i+1]),
+                    nn.BatchNorm2d(self.hidden_dims[i+1]),
                     nn.LeakyReLU())
             )
 
         self.decoder_layers = nn.Sequential(*modules)
 
+        # self.final_layer = nn.Sequential(
+        #                     nn.ConvTranspose2d(self.hidden_dims[-1],
+        #                                        self.hidden_dims[-1],
+        #                                        kernel_size=3,
+        #                                        stride=2,
+        #                                        padding=1,
+        #                                        output_padding=1),
+        #                     nn.BatchNorm2d(self.hidden_dims[-1]),
+        #                     nn.LeakyReLU(),
+        #                     nn.Conv2d(self.hidden_dims[-1], out_channels=1,
+        #                               kernel_size= 7, padding= 3),
+        #                     nn.BatchNorm2d(1),
+        #                     )
         self.final_layer = nn.Sequential(
-                            nn.ConvTranspose2d(self.hidden_dims[-1],
-                                               self.hidden_dims[-1],
-                                               kernel_size=3,
-                                               stride=2,
-                                               padding=1,
-                                               output_padding=1),
+                            Upsampler(in_channels = self.hidden_dims[-1], out_channels = self.hidden_dims[-1], out_size = self.intermediate_hw[-1]),
                             nn.BatchNorm2d(self.hidden_dims[-1]),
                             nn.LeakyReLU(),
-                            nn.Conv2d(self.hidden_dims[-1], out_channels=1,
-                                      kernel_size= 7, padding= 3),
-                            nn.BatchNorm2d(1)
-                            # nn.Softmax(dim=2)
+                            Upsampler(in_channels = self.hidden_dims[-1], out_channels = 1, out_size = self.intermediate_hw[-1]),
+                            nn.BatchNorm2d(1),
                             )
         
     def encoder(self, x):
@@ -86,7 +117,7 @@ class VAE(nn.Module):
         
     def decoder(self, z):
         h = self.decoder_input(z)
-        H, W = self.intermediate_hw[-1]
+        H, W = self.intermediate_hw[0]
         C = self.hidden_dims[0]
         h = h.reshape(-1, C, H, W)
         h = self.decoder_layers(h)
