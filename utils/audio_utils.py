@@ -41,7 +41,6 @@ class RealTimeAudioStream:
                             n_fft=self.window_size,
                             win_length=self.window_size,
                             hop_length=self.overlap,
-                            normalized=True,
                             ).to(self._d).double()
 
     def _rms(self):

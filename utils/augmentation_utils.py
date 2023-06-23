@@ -403,8 +403,8 @@ def draw_text(h, w, font_source, text_source, convert_RGB=True):
 
     # scale = random.randint(10, image_scale // 4)
     scale_initial = 20
-    x_random = 1
-    y_random = 0
+    x_random = 0.04
+    y_random = 0.002
     scale_random = 0.02
     required_text_w = w - (w//5)
 
