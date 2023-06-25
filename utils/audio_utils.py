@@ -3,6 +3,10 @@ import cv2
 import torchaudio.transforms as TAT
 import torch.nn.functional as F
 
+import numpy as np
+
+import pyaudio
+
 import soundcard as sc
 import soundfile as sf
 
@@ -11,6 +15,9 @@ import keyboard
 class RealTimeAudioStream:
     def __init__(self, sample_rate = 44100, window_size = 1024, overlap = 512, buffer_seconds = 5, cv2_window_size = (256, 512), z_dim = 256):
         
+        self.audio = pyaudio.PyAudio()
+        self.mic_device = self._get_mic("Scarlet")
+
         self.cv2_window_size = cv2_window_size # (H, W)
 
         self.done = None
@@ -25,8 +32,17 @@ class RealTimeAudioStream:
         self.window_size = window_size # samples per processsing step
         self.overlap = overlap # overlap
 
-        self._mic = sc.get_microphone(id=str(sc.default_speaker().name), include_loopback=True)
-        self._num_channels = self._mic.channels
+        # self._mic = sc.get_microphone(id=str(sc.default_speaker().name), include_loopback=True)
+        # self._mic = sc.get_microphone(id=str(sc.default_microphone().name), include_loopback=True)
+        self._mic = self.audio.open(format=pyaudio.paInt16,
+                    channels=1,
+                    input_device_index=self.mic_device['index'],
+                    rate=self.sample_rate,
+                    input=True,
+                    frames_per_buffer=self.overlap)
+        
+        # self._num_channels = self._mic.channels
+        self._num_channels = 1
 
         self._buffer_size = self.sample_rate * buffer_seconds # samples memory size
         self._buffer_wav = torch.zeros((self._buffer_size, self._num_channels), dtype=float, device=self._d, requires_grad=False)
@@ -42,6 +58,20 @@ class RealTimeAudioStream:
                             win_length=self.window_size,
                             hop_length=self.overlap,
                             ).to(self._d).double()
+
+    def _get_mic(self, query):
+
+        info = self.audio.get_host_api_info_by_index(0)
+        numdevices = info.get('deviceCount')
+
+        for i in range(0, numdevices):
+            device = self.audio.get_device_info_by_host_api_device_index(0, i)
+            if (device.get('maxInputChannels')) > 0:
+                name = device.get('name')
+                if query in name:
+                    break
+
+        return device
 
     def _rms(self):
         current = self._buffer_wav[-self.window_size:, :]
@@ -80,7 +110,8 @@ class RealTimeAudioStream:
         return image.permute(1,2,0).cpu().numpy()
 
     def step(self, mic):
-        self._current = torch.from_numpy(mic.record(numframes=self.overlap)).to(self._d) # [window_size, num_channels] ~ [1024, 2]
+        # self._current = torch.from_numpy(mic.record(numframes=self.overlap)).to(self._d) # [window_size, num_channels] ~ [1024, 2]
+        self._current = torch.from_numpy(np.frombuffer(self._mic.read(self.overlap, exception_on_overflow=False), dtype=np.int16)/(2**15)).to(self._d).unsqueeze(1)
 
         self._buffer_wav = torch.cat((self._buffer_wav, self._current), dim=0)[self.overlap:,:]
         self._rms()
@@ -100,15 +131,15 @@ class RealTimeAudioStream:
     def stream(self):
         self.done = False
 
-        with self.get_recorder() as mic:
-            while not self.done:
-                self.step(mic)
-                cv2.imshow('stream', self._vis())
+        # with self.get_recorder() as mic:
+        while not self.done:
+            self.step(None)
+            cv2.imshow('stream', self._vis())
 
-                k = cv2.waitKey(33)
-                if k==27:    # Esc key to stop
-                    self.done = True
-                    cv2.destroyAllWindows()
-                    break
+            k = cv2.waitKey(33)
+            if k==27:    # Esc key to stop
+                self.done = True
+                cv2.destroyAllWindows()
+                break
 
-            cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
