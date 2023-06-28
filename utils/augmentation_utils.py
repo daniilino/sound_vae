@@ -402,10 +402,10 @@ def get_text_dimensions(text_string, font):
 def draw_text(h, w, font_source, text_source, convert_RGB=True):
 
     # scale = random.randint(10, image_scale // 4)
-    scale_initial = 20
-    x_random = 0.04
-    y_random = 0.002
-    scale_random = 0.02
+    scale_initial = 30
+    x_random = 0.01
+    y_random = 0.01
+    scale_random = 0.05
     required_text_w = w - (w//5)
 
     font_path = sample_random_file(font_source)

@@ -24,14 +24,14 @@ class VAE(nn.Module):
         modules = []
         self.intermediate_hw = []
 
-        if hidden_dims is None:
-            self.hidden_dims = [32, 64, 32, 8]
+        self.encoder_dims = [8, 16, 32, 64]
+        self.decoder_dims = [256, 128, 64, 32, 16]
 
         # Build Encoder
         B, in_channels, out_h, out_w = sample_x.shape
         self.intermediate_hw.append((out_h, out_w))
         K, S, P = 3, 2, 1
-        for h_dim in self.hidden_dims:
+        for h_dim in self.encoder_dims:
             modules.append(
                 nn.Sequential(
                     nn.Conv2d(in_channels, out_channels=h_dim,
@@ -50,15 +50,16 @@ class VAE(nn.Module):
 
         self.encoder_layers = nn.Sequential(*modules)
         
-        self.fc_mu = nn.Linear(self.hidden_dims[-1]*out_h*out_w, z_dim) # [B, Z_dim]
-        self.fc_var = nn.Linear(self.hidden_dims[-1]*out_h*out_w, z_dim) # [B, Z_dim]
+        
+        self.fc_mu = nn.Linear(self.encoder_dims[-1]*out_h*out_w, z_dim) # [B, Z_dim]
+        self.fc_var = nn.Linear(self.encoder_dims[-1]*out_h*out_w, z_dim) # [B, Z_dim]
 
         # Build Decoder
         modules = []
 
-        self.decoder_input = nn.Linear(z_dim, self.hidden_dims[-1] * out_h * out_w)
+        self.decoder_dims = [dim * 2 for dim in self.encoder_dims[::-1]]
+        self.decoder_input = nn.Linear(z_dim, self.decoder_dims[0] * out_h * out_w)
 
-        self.hidden_dims.reverse()
         self.intermediate_hw.reverse()
 
         # ####### DECONV #################
@@ -75,13 +76,12 @@ class VAE(nn.Module):
         #             nn.LeakyReLU())
         #     )
         # #########################################
-
         ############## UPSAMPLING ###################
-        for i in range(len(self.hidden_dims) - 1):
+        for i in range(len(self.decoder_dims) - 1):
             modules.append(
                 nn.Sequential(
-                    Upsampler(in_channels = self.hidden_dims[i], out_channels = self.hidden_dims[i+1], out_size = self.intermediate_hw[i+1]),
-                    nn.BatchNorm2d(self.hidden_dims[i+1]),
+                    Upsampler(in_channels = self.decoder_dims[i], out_channels = self.decoder_dims[i+1], out_size = self.intermediate_hw[i+1]),
+                    nn.BatchNorm2d(self.decoder_dims[i+1]),
                     nn.LeakyReLU())
             )
         ##########################################
@@ -106,10 +106,10 @@ class VAE(nn.Module):
         
         ############## UPSAMPLING ###################
         self.final_layer = nn.Sequential(
-                            Upsampler(in_channels = self.hidden_dims[-1], out_channels = self.hidden_dims[-1], out_size = self.intermediate_hw[-1]),
-                            nn.BatchNorm2d(self.hidden_dims[-1]),
+                            Upsampler(in_channels = self.decoder_dims[-1], out_channels = self.decoder_dims[-1], out_size = self.intermediate_hw[-1]),
+                            nn.BatchNorm2d(self.decoder_dims[-1]),
                             nn.LeakyReLU(),
-                            Upsampler(in_channels = self.hidden_dims[-1], out_channels = 1, out_size = self.intermediate_hw[-1]),
+                            Upsampler(in_channels = self.decoder_dims[-1], out_channels = 1, out_size = self.intermediate_hw[-1]),
                             nn.BatchNorm2d(1),
                             )
         ##########################################
@@ -127,7 +127,7 @@ class VAE(nn.Module):
     def decoder(self, z):
         h = self.decoder_input(z)
         H, W = self.intermediate_hw[0]
-        C = self.hidden_dims[0]
+        C = self.decoder_dims[0]
         h = h.reshape(-1, C, H, W)
         h = self.decoder_layers(h)
         h = self.final_layer(h)
