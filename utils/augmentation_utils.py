@@ -351,7 +351,8 @@ def generate_logo(logo_path, dr_geo, w, h, logo_base_scale=1):
 
 def sample_random_file(folder):
 
-    font_paths = [os.path.join(folder, entry) for entry in os.listdir(folder) if os.path.isfile(os.path.join(folder, entry))]
+    font_paths = [os.path.join(folder, entry) for entry in os.listdir(folder) 
+                  if os.path.isfile(os.path.join(folder, entry)) and entry != ".DS_Store"]
     font_path = font_paths[random.randint(0,len(font_paths)-1)]
     return font_path
 
@@ -403,13 +404,12 @@ def draw_text(h, w, font_source, text_source, convert_RGB=True):
 
     # scale = random.randint(10, image_scale // 4)
     scale_initial = 30
-    x_random = 0.01
-    y_random = 0.01
-    scale_random = 0.05
+    x_random = 0.00001
+    y_random = 0.00001
+    scale_random = 0.03
     required_text_w = w - (w//5)
 
     font_path = sample_random_file(font_source)
-
     font = ImageFont.truetype(font_path, scale_initial)  
     text = sample_phrase(text_source)
 

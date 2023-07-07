@@ -75,7 +75,7 @@ class RealTimeAudioStream:
         self.queue = mp.Queue()
         self.cv2_window_size = cv2_window_size  # (H, W)
         self.chunk = chunk
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu")
         self.sample_rate = mp.Value("i", 0)
         self.is_streaming = mp.Value("i", 0)
 
@@ -84,14 +84,14 @@ class RealTimeAudioStream:
 
         self._new_wav = torch.zeros(
             (1, self.chunk),
-            dtype=float,
+            dtype=torch.float32,
             device=self.device,
             requires_grad=False,
         )  # this is the last piece of information we obtained
 
         self.current_rms = torch.zeros(
             (1, 1),
-            dtype=float,
+            dtype=torch.float32,
             device=self.device,
             requires_grad=False,
         )
@@ -100,15 +100,14 @@ class RealTimeAudioStream:
 
         self.processor_fft = (
             TAT.MelSpectrogram(
-                sample_rate=self.sample_rate.value,
+                sample_rate=48000,
                 n_mels=z_dim,
                 n_fft=self.chunk,
                 win_length=self.chunk,
                 hop_length=self.chunk,
             )
             .to(self.device)
-            .double()
-        )  # here double as well
+        ) 
 
         self.is_streaming.value = 1  # start streaming
 
@@ -122,6 +121,7 @@ class RealTimeAudioStream:
                 self.sample_rate,
                 self.is_streaming
             ),
+            daemon=True
         )
 
         process.start()
@@ -160,7 +160,7 @@ class RealTimeAudioStream:
             0, :
         ]  # [TIME]
         image = torch.zeros(
-            (3, H, TIME), dtype=float, requires_grad=False, device=self.device
+            (3, H, TIME), dtype=torch.float32, requires_grad=False, device=self.device
         )  # [3, H, W1]
 
         image[2, show_R, torch.arange(0, TIME)] = 1
@@ -190,4 +190,5 @@ class RealTimeAudioStream:
         if fft:
             self._fft()
 
-        return self.current_rms.cuda(), self.current_zcr.cuda(), self.current_fft.cuda()
+
+        return self.current_rms, self.current_zcr, self.current_fft
